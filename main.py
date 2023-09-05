@@ -5,6 +5,7 @@ import numpy as np
 df = pd.read_csv('Dataset_Final.csv')
 d_gastos = pd.read_csv('df_gastos.csv')
 df_reviu = pd.read_csv('df_reviu.csv')
+df_genre = pd.read_csv('df_genre.csv')
 df_genre_t = pd.read_csv('df_genre_rankink.csv')
 df_developer = pd.read_csv('df_developer.csv')
 
@@ -12,7 +13,7 @@ df_developer = pd.read_csv('df_developer.csv')
 app = FastAPI()
 @app.get('/userdata/{user_id}')
 
-def userdata(user_id):
+def userdata(user_id:str):
     
     usuario = df_reviu[df_reviu['user_id'] == user_id]
     cantidad_dinero = d_gastos[d_gastos['user_id']== user_id]['price'].iloc[0]
@@ -57,6 +58,23 @@ def genre(genre: str):
 
     return info
 
+@app.get('/userforgenre/{genero}')
+
+
+def userforgenre(genero):
+    data = df_genre[df_genre['genres'] == genero]
+    top = data.groupby(['user_url', 'user_id'])['playtime_forever'].sum().nlargest(5).reset_index()
+    
+    top_users = {}
+    for index, row in top.iterrows():
+        user_info = {
+            'user_id': row['user_id'],
+            'user_url': row['user_url']
+        }
+        top_users[index + 1] = user_info
+    
+    return top_users
+
 @app.get('/developer/{desarrollador}')
 
 def developer(desarrollador):
@@ -73,7 +91,7 @@ def developer(desarrollador):
     return result
 
 @app.get('/sentiment_analysis/{anio}')
-def sentiment_analysis(anio):
+def sentiment_analysis(anio:str):
     # Filtrar las reseñas del desarrollador específico
     año_reviu = df_reviu[df_reviu['year'] == anio]
     
