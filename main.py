@@ -11,7 +11,7 @@ df_developer = pd.read_csv('df_developer.csv')
 
 
 app = FastAPI()
-@app.get('/userdata/{user_id}')
+@app.get('/userdata/')
 
 def userdata(user_id:str):
     
@@ -91,7 +91,7 @@ def developer(desarrollador):
     return result
 
 @app.get('/sentiment_analysis/{anio}')
-def sentiment_analysis(anio:str):
+def sentiment_analysis(anio:int):
     # Filtrar las reseñas del desarrollador específico
     año_reviu = df_reviu[df_reviu['year'] == anio]
     
