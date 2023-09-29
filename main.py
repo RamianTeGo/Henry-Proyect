@@ -2,107 +2,106 @@ from fastapi import FastAPI
 import pandas as pd
 import numpy as np
 
-d_gastos = pd.read_csv('df_gastos.csv')
-df_reviu = pd.read_csv('df_reviu.csv')
-df_genre = pd.read_csv('df_genre.csv')
-df_genre_t = pd.read_csv('df_genre_rankink.csv')
-df_developer = pd.read_csv('df_developer.csv')
+#generos1 = pd.read_csv('generos1.csv')
+recomendado = pd.read_csv('recomendado.csv')
+sentimento = pd.read_csv('sentiment.csv')
+
 
 
 app = FastAPI()
-@app.get('/userdata/{user_id}')
 
-def userdata(user_id):
+@app.get('/PlayTimeGenre/{genero}')
+
+def PlayTimeGenre( genero : str ):
+
     
-    usuario = df_reviu[df_reviu['user_id'] == str(user_id)]
-    cantidad_dinero = d_gastos[d_gastos['user_id']== user_id]['price'].iloc[0]
-    count_items = d_gastos[d_gastos['user_id']== user_id]['items_count'].iloc[0]
+    genero_df = generos1[generos1['genres'].str.contains(genero, case=False)]
     
-    total_recomendaciones = usuario['recommend'].sum()
-    total_reviews = len(df_reviu['user_id'].unique())
-    porcentaje_recomendaciones = (total_recomendaciones / total_reviews) * 100
-
-    return {
-        'cantidad_dinero': cantidad_dinero,
-        'porcentaje_recomendacion': round(porcentaje_recomendaciones, 2),
-        'total_items': count_items.astype(int)}
-
-
-@app.get('/countreviews/{fi}')
-
-def countreviews(fi, ff):
+    anio_con_max_horas = genero_df.groupby('year')['playtime_forever'].sum().idxmax()
     
-    userfechas = df_reviu[(df_reviu['date'] >= fi) & (df_reviu['date'] <= ff)]
-    total_user = userfechas['user_id'].nunique()
-    recomendacion = len(userfechas)
-    total_recomendaciones = userfechas['recommend'].sum()
-    porcentaje = (total_recomendaciones / recomendacion) * 100
+    return {f'Año con mas horas jugadas del genero {genero}':anio_con_max_horas}
+
+
+@app.get('/UserForGenre/{genero}')
+
+def UserForGenre( genero : str ):
     
-    return {
-        'total_review': total_user,
-        'porcentaje': round(porcentaje,2)
-    }
-
-@app.get('/genre/{genre}')
-def genre(genre: str):
-
-    ranking = df_genre_t['ranking'][df_genre_t['genres'] == genre]
-    ranking = int(ranking.iloc[0])
-
-    ptf = df_genre_t['playtime_forever'][df_genre_t['genres'] == genre]
-    ptf = int(ptf.iloc[0])
-
-    info = {'Ranking': ranking,
-            'playtime': ptf}
-
-    return info
-
-@app.get('/userforgenre/{genero}')
-
-
-def userforgenre(genero):
-    data = df_genre[df_genre['genres'] == genero]
-    top = data.groupby(['user_url', 'user_id'])['playtime_forever'].sum().nlargest(5).reset_index()
     
-    top_users = {}
-    for index, row in top.iterrows():
-        user_info = {
-            'user_id': row['user_id'],
-            'user_url': row['user_url']
-        }
-        top_users[index + 1] = user_info
+    genero_df = generos1[generos1['genres'].str.contains(genero, case=False)]
     
-    return top_users
+    usuario_mas_horas = genero_df.groupby('user_id')['playtime_forever'].sum().idxmax()
+    
+    usuario_genero_df = genero_df[genero_df['user_id'] == usuario_mas_horas]
+    
+    acumulacion_horas_por_anio = usuario_genero_df.groupby('year')['playtime_forever'].sum().reset_index()
 
-@app.get('/developer/{desarrollador}')
+    lista_acumulacion_horas = [{'año': año, 'horas': horas} for año, horas in zip(acumulacion_horas_por_anio['year'], acumulacion_horas_por_anio['playtime_forever'])]
 
-def developer(desarrollador):
-    data = df_developer[df_developer['developer'] == desarrollador]
-    cantidad_anual = data.groupby('year')['item_id'].count()
-    cantidad_free = data[data['price'] == 0.0].groupby('year')['item_id'].count()
-    porcentaje_gratis = (cantidad_free / cantidad_anual * 100).fillna(0).astype(int)
+    
+    return {f'Usuario con mas horas jugadas para el genero {genero}': usuario_mas_horas, 'Horas jugadas': lista_acumulacion_horas}
 
-    result = {
-        'cantidad anual': cantidad_anual.to_dict(),
-        'porcentaje free anual': porcentaje_gratis.to_dict()
-    }
+
+@app.get('/UsersRecommend/{año}')
+
+
+def UsersRecommend(año:int):
+    
+
+    filtered_df = recomendado[(recomendado['year'] == año) & (recomendado['recommend'] == True) & (recomendado['sentiment_analisy'] >= 1)]
+    
+    # Agrupar y contar los juegos recomendados
+    game_counts = filtered_df['app_name'].value_counts().reset_index()
+    game_counts.columns = ['app_name', 'count']
+    
+    # Ordenar por la cantidad de recomendaciones en orden descendente
+    sorted_games = game_counts.sort_values(by='count', ascending=False)
+    
+    # Tomar los 3 juegos principales
+    top_3_games = sorted_games.head(3)
+    
+    # Crear la lista de diccionarios en el formato deseado
+    result = [{"Puesto {}: {}".format(i+1, game['app_name'])} for i, game in top_3_games.iterrows()]
+    
+    return result
+
+
+@app.get('/UsersNotRecommend/{año}')
+
+def UsersNotRecommend(año:int):
+
+    
+
+
+    filtered_df = recomendado[(recomendado['year'] == año) & (recomendado['recommend'] == False) & (recomendado['sentiment_analisy'] == 0)]
+    
+    # Agrupar y contar los juegos menos recomendados
+    game_counts = filtered_df['app_name'].value_counts().reset_index()
+    game_counts.columns = ['app_name', 'count']
+    
+    # Ordenar por la cantidad de juegos menos recomendados en orden descendente
+    sorted_games = game_counts.sort_values(by='count', ascending=False)
+    
+    # Tomar los 3 juegos principales
+    top_3_least_recommended = sorted_games.head(3)
+    
+    # Crear la lista de diccionarios en el formato deseado
+    result = [{"Puesto {}: {}".format(i+1, game['app_name'])} for i, game in top_3_least_recommended.iterrows()]
     
     return result
 
 @app.get('/sentiment_analysis/{anio}')
-def sentiment_analysis(anio:int):
-    # Filtrar las reseñas del desarrollador específico
-    año_reviu = df_reviu[df_reviu['year'] == anio]
+
+def sentiment_analysis(año:int):
     
-    # Inicializar un diccionario para contar las categorías de sentimiento
+
+    año_reviu = sentimento[sentimento['year'] == año]
+    
     conteo_sentiment = {'Negative': 0, 'Neutral': 0, 'Positive': 0}
     
-    # Iterar a través de las reseñas del desarrollador
     for index, row in año_reviu.iterrows():
         sentiment = row['sentiment_analisy']
         categoria = ''
         
-        # Asignar la categoría de sentimiento correspondiente
         if sentiment == 0:
             categoria = 'Negative'
         elif sentiment == 1:
